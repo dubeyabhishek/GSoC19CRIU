@@ -45,12 +45,13 @@
               <li> <a href="xemul@virtuozzo.com">Pavel Emelianov</a> </li>
               <li> <a href="avagin@gmail.com">Andrei Vagin</a> </li>
               <li> <a href="rppt@linux.ibm.com">Mike Rapoport</a> </li>
+              <li> <a href="rstoyanov1@gmail.com ">Radostin Stoyanov</a> </li>
           </ul>
           <p style="margin-left:5%"> <b>Commit list (working repo): </b><a href="https://github.com/dubeyabhishek/criu/commits/criu-dev">Github link</a></p>
-          <p style="margin-left:5%; width: 58%"> <b>Official Documentation: </b><a href="https://criu.org/Optimizing_pre_dump_algorithm">Wiki page</a></p>
+          <p style="margin-left:5%; width: 58%"> <b>Official Documentation: </b><a href="https://criu.org/Optimizing_pre_dump_algorithm">Wiki page of product</a></p>
       </div>
 
-      <h3> Quick Run</h3>
+      <h3> Jump start</h3>
            <p style="background-color: #D3D3D3;">  git clone git@github.com:dubeyabhishek/criu.git<br>
                 <br/>
                 cd criu/<br>
@@ -65,23 +66,33 @@
            </p> 
       <h3> The Project</h3>
       <p>
-         I was involved in GSoC’19 with <a href="https://www.criu.org/Main_Page">CRIU</a> organization working on the project - Optimizing Pre-dump algorithm.
-         The idea behind this project was to reduce memory pressure on system and frozen time of target process while pre-dumping.
+         I was involved in GSoC’19 with <a href="https://www.criu.org/Main_Page">CRIU</a> organization working on the project - 
+         <a href="https://www.criu.org/Memory_pre_dump">Optimizing Pre-dump algorithm</a>.
+         The idea behind this project was to reduce memory pressure and frozen time of target process while pre-dumping.
       </p>
 
       <h3> The Idea</h3>
       <p>
-         During pre-dump in CRIU, the memory pages of target process are stored in pipe-pages, until the content is not flushed to disk image or page-server.
-         Primary issue is bloat of irreclaimable memory due to pipe-pages. Pipe buffers are pinned in memory, making them non swappable. Also the pipes have
-         maximum size restriction, so there could be many pipes which results in memory pressure during pre-dump process. Replacing pipe-pages with userspace
-         supplied buffer from CRIU will alleviate this memory pressure. Since, the buffer pages can be swapped out.
+         In current implementation of <a href="https://www.criu.org/Incremental_dumps">pre-dump</a> in CRIU, first the memory content(pages) of target process 
+         are stored in pipes. Later the pipes are flushed to
+         disk images or page-server. Pipes are backed by pipe-buffer pages to store data. The pipe-buffer pages are pinned to memory making them non swappable. 
+         When the count of pipe-buffer pages is high, the system is left with limited swappable pages to serve new memory requests. This incurs memory pressure 
+         on overall system and may thrash hampering the performance. So, handling memory pressure is first issue.
          <br /><br />
-         Another issue is duration for which pre-dump algorithm freezes the target process. Use case like live migration expects smallest possible freezing
-         glitch. So, objective is to reduce this frozen time of process during pre-dump.
+         Another issue is duration for which current pre-dump algorithm keeps the target process <a href="https://www.criu.org/Freezing_the_tree">frozen</a>. 
+         The parasite(blob injected in target process) in 
+         current implementation drains the memory pages of target process into pipes and the target process remains frozen unless all pages are not drained. The 
+         longer the frozen time, longer the duration for which pipe pages will be pinned to memory leading to memory pressure situation. Another use case which 
+         desires shortest frozen time is live migration. So, another objective is to reduce frozen time of target process while pre-dumping.
          <br /><br />
-         To achieve both of these objectives, we use process_vm_readv system call with a set of VMA-list gathered by freezing target task for minimal amount
-         of time. There are challenges in handling memory areas with this approach, like race conditions resulting in false reads. Development of graceful
-         solution for these challenges is objective of this project.
+         The optimized implementation must solve above mentioned two issues. In new pre-dump approach, the target process is frozen only till memory mappings are 
+         collected. Then the process is unfrozen and it continues normally. Now start draining of process memory. We use 
+         <a href="http://man7.org/linux/man-pages/man2/process_vm_readv.2.html"><em>process_vm_readv</em></a> 
+         syscall to drain pages to user-space buffer. The syscall is given memory mappings(collected earlier) as input to perform this task. Since draining of 
+         memory pages and process execution happen simultaneously, there is a possibility that the running process might have modified some memory mappings after 
+         they have been collected by pre-dump. 
+         In such case <em>process_vm_readv</em> will encounter the old mappings and fails. This gives rise to a race between pre-dumping and process execution. This race 
+         needs to be handled on the fly for <em>process_vm_readv</em> to successfully drain complete memory.
 
       </p>
       
@@ -94,42 +105,42 @@
   			</tr>
   			<tr align="center">
     				<td>[PATCH 0/7]</td>
-    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044391.html"> GSoC 19: Optimizing the Pre-dump Algorithm </a></td>
+    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044407.html"> GSoC 19: Optimizing the Pre-dump Algorithm </a></td>
     				<td>Submitted</td>
   			</tr>
   			<tr align="center">
     				<td>[PATCH 1/7]</td>
-    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044392.html"> Skip adding PROT_READ flag </a></td>
+    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044408.html"> Adding --pre-dump-mode option </a></td>
     				<td>Submitted</td>
   			</tr>
                         <tr align="center">
     				<td>[PATCH 2/7]</td>
-    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044393.html"> Skip generating iov for non PROT_READ region </a></td>
+    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044409.html"> Skip generating iov for non-PROT_READ memory </a></td>
     				<td>Submitted</td>
   			</tr>
   			<tr align="center">
     				<td>[PATCH 3/7]</td>
-    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044394.html"> Merging splice and read modes of pre-dump </a></td>
+    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044410.html"> Skip adding PROT_READ to non-PROT_READ mappings </a></td>
     				<td>Submitted</td>
   			</tr>
                         <tr align="center">
     				<td>[PATCH 4/7]</td>
-    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044395.html"> Drain memory using process_vm_readv syscall </a></td>
+    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044411.html"> Adding cnt_sub for stats manipulation </a></td>
     				<td>Submitted</td>
   			</tr>
   			<tr align="center">
     				<td>[PATCH 5/7]</td>
-    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044396.html"> Adding new function cnt_sub </a></td>
+    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044412.html"> Handle vmsplice failure for read mode pre-dump </a></td>
     				<td>Submitted</td>
   			</tr>
                         <tr align="center">
     				<td>[PATCH 6/7]</td>
-    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044398.html"> Handle vmsplice failure for read mode pre-dump </a></td>
+    				<td align="left"> <a href="https://lists.openvz.org/pipermail/criu/2019-August/044413.html"> The read mode pre-dump implementation </a></td>
     				<td>Submitted</td>
   			</tr>
   			<tr align="center">
     				<td>[PATCH 7/7]</td>
-    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044397.html"> Adding --pre-dump-mode option</a></td>
+    				<td align="left"><a href="https://lists.openvz.org/pipermail/criu/2019-August/044414.html"> Refactor time accounting macros</a></td>
     				<td>Submitted</td>
   			</tr>
   			
@@ -145,17 +156,19 @@
       <h3> Evaluation </h3>
           <ol>
               <li style="margin-left:0%"> Performance </li>
+	      <p style="margin-left:0%">test-config: 1GB</p>
+              <p style="margin-left:0%"># python test/zdtm.py run --pre &lt;count> -t zdtm/static/maps04 --pre-dump-mode=&lt;read/splice> </p>
               <br/>
 	           <table style="width:30%">
   			<tr align="center">
-    				<th>Pre-dump #</th>
-    				<th>splice (original)</th> 
-    				<th>read (optimized)</th>
+				<th>Pre-dump #</th>
+				<th>splice (original)</th>
+				<th>read (optimized)</th>
   			</tr>
   			<tr align="center">
     				<td>1</td>
-    				<td>0.59</td>
-    				<td>0.66</td>
+				<td>0.59*</td>
+				<td>0.66*</td>
   			</tr>
   			<tr align="center">
     				<td>2</td>
@@ -184,9 +197,13 @@
   			</tr>
 		</table>
               <br/>
-              <p style="margin-left:0%">Average performance drop : ~ 7%</p>
+
+              <p style="margin-left:0%">Average performance drop : ~7%</p>
+	      <p style="margin-left:0%">* First pre-dump in sequence have ~13% performance drop.</p>
               <br/>
+
               <li style="margin-left:0%"> Frozen Time</li>
+              <p style="margin-left:0%">test-config: 1 GB</p>
                    <br/>
 	           <table style="width:30%">
   			<tr align="center">
@@ -196,46 +213,59 @@
   			</tr>
   			<tr align="center">
     				<td>1</td>
-    				<td>109539</td>
-    				<td>76995</td>
+				<td>125.13*</td>
+				<td>82.93*</td>
   			</tr>
   			<tr align="center">
     				<td>2</td>
-    				<td>117510</td>
-    				<td>81148</td>
+				<td>76.28</td>
+				<td>65.94</td>
   			</tr>
   			<tr align="center">
     				<td>3</td>
-    				<td>112030</td>
-    				<td>81192</td>
+				<td>78.05</td>
+				<td>69.52</td>
   			</tr>
 			<tr align="center">
     				<td>4</td>
-    				<td>113520</td>
-    				<td>79184</td>
+				<td>77.80</td>
+				<td>69.58</td>
   			</tr>
 			<tr align="center">
     				<td>5</td>
-    				<td>118218</td>
-    				<td>81477</td>
+				<td>74.61</td>
+				<td>65.31</td>
   			</tr>
 			<tr align="center" bgcolor="#D3D3D3">
     				<td>Total</td>
-    				<td>570817</td>
-    				<td>399996</td>
+				<td>431.87</td>
+				<td>353.28</td>
   			</tr>
 		</table>
               <br/>
-              <p style="margin-left:0%">Average frozen time reduced : ~ 30%</p>
+
+              <p style="margin-left:0%">Average frozen time reduced : ~18%</p>
+	      <p style="margin-left:0%">* First pre-dump in sequence is ~35% faster.</p>
               <br/>
 
           <li style="margin-left:0%"> Memory pressure </li>
+          <p style="margin-left:0%"> The new implementation reduces memory pressure on system, as pipes don't hog memory for longer duration.</p>
           </ol>
 
       <h3> Future work</h3>
-      <ul style="margin-left:18%; width: 55%">
+      <ul style="margin-left:19%; width: 50%">
           <li> Possible optimization of page-by-page processing when huge memory region is unampped.</li>
-          <li> Develop new syscall by utilizing best of splice syscall and process_vm_readv syscall to avoid intermediate user-buffer. The new system call will directly splice memory pages to image files from the target process space.</li>
+          <li> Develop new syscall by utilizing best of splice syscall and process_vm_readv syscall to avoid intermediate user-buffer.
+               The new system call will directly splice memory pages to image files from the target process.</li>
       </ul>
+
+      <h3> Acknowledgements </h3>
+        <p> I am thankful to my mentors Pavel, Andrei and Mike for their guidance throughout the project. It was a great learning experience while working with them.
+            I got chance to deep dive into memory draining part of CRIU and it was fun. Special thanks to Radostin for his prompt help and feedback. I would love to
+            keep contributing to this wonderful community, called CRIU.
+        </p>
+
+      <h3> Conclusion </h3>
+        <p> Overall, this year’s GSoC was a end-to-end learning experience for me and now I know "Open source" better than ever.</p>
    </body>
 </html>
