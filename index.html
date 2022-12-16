@@ -42,10 +42,10 @@
           <p style="margin-left:5%"> <b>Organization:</b> CRIU</p>
           <p style="margin-left:5%"> <b>Mentors:</b></p>
           <ul> 
-              <li> <a href="xemul@virtuozzo.com">Pavel Emelianov</a> </li>
-              <li> <a href="avagin@gmail.com">Andrei Vagin</a> </li>
-              <li> <a href="rppt@linux.ibm.com">Mike Rapoport</a> </li>
-              <li> <a href="rstoyanov1@gmail.com ">Radostin Stoyanov</a> </li>
+              <li> <a href="xemul@virtuozzo.com">Pavel Emelianov (ScyllaDB)</a> </li>
+              <li> <a href="avagin@gmail.com">Andrei Vagin (Google)</a> </li>
+              <li> <a href="rppt@linux.ibm.com">Mike Rapoport (IBM)</a> </li>
+              <li> <a href="rstoyanov1@gmail.com ">Radostin Stoyanov (RedHat)</a> </li>
           </ul>
           <p style="margin-left:5%"> <b>Commit list (working repo): </b><a href="https://github.com/dubeyabhishek/criu/commits/criu-dev">Github link</a></p>
           <p style="margin-left:5%; width: 58%"> <b>Official Documentation: </b><a href="https://criu.org/Optimizing_pre_dump_algorithm">Wiki page of product</a></p>
@@ -258,7 +258,7 @@
 
       <h3> Future work</h3>
       <ul style="margin-left:19%; width: 50%">
-          <li> Possible optimization of page-by-page processing when huge memory region is unampped.</li>
+          <li> Possible optimization of page-by-page processing when huge memory region is unmapped.</li>
           <li> Develop new syscall by utilizing best of splice syscall and process_vm_readv syscall to avoid intermediate user-buffer.
                The new system call will directly splice memory pages to image files from the target process.</li>
       </ul>
